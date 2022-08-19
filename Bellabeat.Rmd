@@ -1,0 +1,224 @@
+---
+title: "Bellabeat Case Study"
+author: "Daddy Mosanda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About the Company
+
+Bellabeat is a high-tech manufacturer of health-focused smart products for women founded by Urška Sršen and Sando Mur in 2013. It's a successful small company with the potential to become a larger player in the global smart device market. More about the Company can be found on [bellabeat.com](https://bellabeat.com/).
+
+## Business task
+
+Here the task is to identify the potential to unlock new growth opportunity for the company and give hihg-level recommendation for for marketing strategy improvement.
+
+### Questions for the analysis
+
+1. What are some trends in smart device usage?
+2. How Could these trends apply to Bellabeat customer?
+3. How could these trends influence Bellabeat marketing strategy?
+
+ 
+
+## About the Data set
+
+The data source used for this case study is public data that explores smart device user’s daily habits. FitBit Fitness Tracker Data (CCO: Public Domain) is a data set made available through Mobius, it contains personal fitness trackers from thirty fitbits users. The users consented to the submission of personal tracker data, including minute-level output for physical activity, heart rate and sleep monitoring. It includes information about daily activity, steps, and heart rate that can be used to explore the user's habits.
+
+### Organization and verification of the data
+
+18 CSV documents are available to me and each document represents the different data tracked by Fitbit. The data is organized in long format. Since data is tracked and classified by day and time each subject in the data has multiple rows and every user has a unique ID and different rows.
+
+
+## Installing Packages
+
+I will use the following packages to help me for our analysis:
+
+* tidyverse
+* lubridate
+* dplyr
+* ggplot2
+* readr
+
+we will install and open them.
+
+```{r echo=TRUE}
+install.packages("tidyverse")
+library(tidyverse)
+
+install.packages("lubridate")
+library(lubridate)
+
+installed.packages("dplyr")
+library(dplyr)
+
+install.packages("ggplot2")
+library(ggplot2)
+
+
+```
+
+
+## Importing the Data set
+
+```{r echo=TRUE}
+daily_activity <- read.csv("Fitabase/dailyActivity_merged.csv")
+daily_calories <- read.csv("Fitabase/dailyCalories_merged.csv")
+sleep_day <- read.csv("Fitabase/sleepDay_merged.csv")
+weight_log <- read.csv("Fitabase/weightLogInfo_merged.csv")
+daily_steps <- read.csv("Fitabase/dailySteps_merged.csv")
+
+```
+
+Before importing the data I already did some basic cleaning and formatting in Google Sheets. Now I need to make sure that everything was imported correctly. 
+For that I will use head() to see how it looks.
+
+## Cleaning and Formatting
+
+After some verification using str() function I found out that the date and time was not formatted as it should, it was shown as ch instead so I fixed it. I did it for all the data and I also renamed the rows.
+
+```{r echo=TRUE}
+
+daily_activity <- daily_activity %>% 
+  rename(date = ActivityDate) %>% 
+  mutate(date = as_date(date, format = "%m/%d/%y"))
+
+daily_calories <- daily_calories %>% 
+  rename(date = ActivityDay) %>% 
+  mutate(date = as_date(date, format = "%m/%d/%y"))
+
+sleep_day <- sleep_day %>% 
+  rename(date = SleepDay) %>% 
+  mutate(date = as_date(date, format = "%m/%d/%Y"))
+
+weight_log <- weight_log %>% 
+  rename(date = Date) %>% 
+  mutate(date = as.POSIXct(date, format = "%m/%d/%Y %H:%M:%S ", tz = Sys.timezone()))
+  
+
+daily_steps <- daily_steps %>% 
+  rename(date = ActivityDay) %>% 
+  mutate(date = as_date(date, format = "%m/%d/%y"))
+```
+
+## Data Exploration
+
+I wanted to make sure about the exact number of users per frame.
+
+```{r echo=TRUE}
+n_distinct(daily_activity$Id)
+n_distinct(daily_calories$Id)
+n_distinct(sleep_day$Id)
+n_distinct(weight_log$Id)
+```
+The sleep data set size is not enough but I will use that for practice only. But 8 participants is not significant enough to make any recommendation based on the weight data so I won't be using it. 
+
+
+
+Now I want to check the the statistical summary of the data sets:
+
+```{r echo=TRUE}
+# type of users per activity level
+daily_activity %>% 
+  select(Id,
+         date,
+         TotalSteps,
+         TotalDistance,
+         VeryActiveDistance,
+         ModeratelyActiveDistance,
+         LightActiveDistance,
+         SedentaryMinutes,
+         Calories) %>% 
+  summary()
+# sleep day exploration
+sleep_day %>% 
+  select(TotalSleepRecords,
+         TotalMinutesAsleep,
+         TotalTimeInBed) %>% 
+  summary()
+```
+##### The above summary gives me some interesting informations:
+
+. The Users can be categorized in four types, “lightly active”, “moderate active”, ”very active” and “sedentary”.
+
+. Most of users are lightly active
+
+. The Average steps is a bit less for health benefits according to the CDC research. The research demonstrated that 8,000 steps per day was associated with a lower risk of all-cause mortality.
+
+### Merging data
+
+Merging the daily_activity and sleep_day to see if there are any correlations between them.
+
+```{r echo=TRUE}
+merged_activandsleep <- merge(sleep_day, daily_activity, by = 'Id')
+```
+
+## Data Analysis
+
+After some exploration I want to know how often the users are active or not(sleep) so that I can have a clear estimation of when most of the users do activities.
+I want to know the specific days of the week when the users are more active and also what days the users sleep more.
+
+First I’ll start with the active days
+
+```{r echo=TRUE}
+weekday_active <- daily_activity %>% 
+  mutate(weekday = weekdays(date))
+
+weekday_activetab <- weekday_active %>% 
+  group_by(weekday) %>% 
+  summarize(daily_steps = mean(TotalSteps), daily_active = mean(VeryActiveMinutes))
+
+head(weekday_activetab)
+```
+```{r echo=TRUE}
+ggplot(data=weekday_activetab)+
+  geom_col(mapping=aes(x=weekday, y=daily_active, fill=weekday))+
+  labs(title="Active days")
+```
+According to the graph users are more active on Sunday and Saturday
+
+Now let’s look up at the sleep days
+
+```{r echo=TRUE}
+weekday_sleep <- sleep_day %>% 
+  mutate(weekday = weekdays(date))
+
+weekday_sleeptab <- weekday_sleep %>% 
+  group_by(weekday) %>% 
+  summarize(totalMinuteAsleep = mean(TotalMinutesAsleep), timeInBed = mean(TotalTimeInBed))
+```
+```{r echo=TRUE}
+ggplot(data=weekday_sleeptab)+
+  geom_line(mapping=aes(x=weekday, y=totalMinuteAsleep, group=0))+
+  labs(title="Sleep days")
+```
+The graph determines that users sleep more on Sunday but they still do not sleep enough compared to the 8 Hours recommendation. 
+
+The two graphs clearly determine that we have two interesting factor to consider:
+
+We need to get the user more engaged in activity during the other days. For that we need to find strategies to keep them working out and enjoy that time.
+We need to encourage the users to sleep at least for 8 hours to be in good health and to reduce health issues.
+
+
+## Conclusion
+
+Bellabeat is a high-tech manufacturer of health-focused smart products for women and 
+
+Bellabeat's primary mission is to empower women by providing them with high-tech accessories to help them to build their self-confidence.
+
+To respond to our Business task and ensure that Bellabeat has everything needed to make women’s self-confidence level up. Based on the result of my analysis I’m going to give some recommendations that can help the company to achieve its objectives and improve the different products.
+
+
+1. The analysis shows that users are more active on weekends compared to other days so here my recommendation would be to improve the notification system in a way that a reminder can be set up so that when a certain time of inactivity is observed the user will be notified to do some work out.
+
+2. There is also the fact that most users sleep more on Sunday but still less than the recommendation of at least 8 hours of sleep for good health. Therefore my recommendation would be to improve the notification system so that the user can be notified of the time to go to sleep and encourage them by providing some information about the benefit of a good sleep.
+
+3. Bellabeat products targets young and adult women, to motivate them to work out while using our product I recommend to encourage those women to be more active by using an reward system that will award the user each time a new achievement is made.
+
+4. Following the firsts recommendations the company should invest on battery lasting and comfort products.
+
+
